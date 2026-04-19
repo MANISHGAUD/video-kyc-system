@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="VideoKyc.API/VideoKyc.API.csproj" Id="1d0fcd5c-2f7d-4e01-89c2-0c0e1912ed8c" />
+  <Project Path="VideoKyc.Application/VideoKyc.Application.csproj" Id="4b4bec78-8d4e-4075-b573-755e60202584" />
+  <Project Path="VideoKyc.Domain/VideoKyc.Domain.csproj" Id="6ee2bdaf-fcae-443a-abac-4eb85d68e6a5" />
+  <Project Path="VideoKyc.Infrastructure/VideoKyc.Infrastructure.csproj" Id="5ecf8966-b0c5-441b-8119-e17a9424551e" />
+</Solution>

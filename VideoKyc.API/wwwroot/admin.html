@@ -1,0 +1,174 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
+</head>
+<body>
+
+    <h2>Admin Dashboard</h2>
+
+    <p id="status">Waiting...</p>
+
+    <ul id="users"></ul>
+
+    <video id="localVideo" autoplay muted playsinline style="width:200px;"></video>
+    <video id="remoteVideo" autoplay playsinline style="width:400px;"></video>
+
+    <br />
+
+    <button onclick="endCall()">End Call</button>
+
+    <script>
+
+        let connection;
+        let peerConnection;
+        let localStream;
+        let isInCall = false;
+
+        async function joinUser(connectionId, btn) {
+            if (isInCall) return;
+
+            btn.disabled = true;
+            document.getElementById("status").innerText = "Connecting...";
+
+            await connection.invoke("StartCall", connectionId);
+        }
+
+        async function endCall() {
+            cleanupCall();
+            await connection.invoke("EndCall");
+        }
+
+        async function startApp() {
+
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl("/callHub")
+                .build();
+
+            await connection.start();
+            await connection.invoke("JoinAdmin");
+
+            localStream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: true
+            });
+
+            document.getElementById("localVideo").srcObject = localStream;
+
+            connection.on("UpdateQueue", (users) => {
+
+                const ul = document.getElementById("users");
+                ul.innerHTML = "";
+
+                users.forEach(session => {
+                    const li = document.createElement("li");
+
+                    li.innerHTML = `
+                    ${session.userId}
+                    <button onclick="joinUser('${session.userConnectionId}', this)">Join</button>
+                `;
+
+                    ul.appendChild(li);
+                });
+            });
+
+            connection.on("UserAlreadyTaken", () => {
+                alert("User already taken");
+            });
+
+            connection.on("ReceiveOffer", async (offer, userConnectionId) => {
+
+                if (isInCall) return;
+                isInCall = true;
+
+                peerConnection = new RTCPeerConnection({
+                    iceServers: [
+                        {
+                            urls: "stun:stun.relay.metered.ca:80",
+                        },
+                        {
+                            urls: "turn:global.relay.metered.ca:80",
+                            username: "ec89d1d30e157d8b291c172c",
+                            credential: "QEn/hIYXcJ5souCu",
+                        },
+                        {
+                            urls: "turn:global.relay.metered.ca:80?transport=tcp",
+                            username: "ec89d1d30e157d8b291c172c",
+                            credential: "QEn/hIYXcJ5souCu",
+                        },
+                        {
+                            urls: "turn:global.relay.metered.ca:443",
+                            username: "ec89d1d30e157d8b291c172c",
+                            credential: "QEn/hIYXcJ5souCu",
+                        },
+                        {
+                            urls: "turns:global.relay.metered.ca:443?transport=tcp",
+                            username: "ec89d1d30e157d8b291c172c",
+                            credential: "QEn/hIYXcJ5souCu",
+                        },
+                    ]
+                });
+
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                peerConnection.onicecandidate = event => {
+                    if (event.candidate) {
+                        connection.invoke("SendIceCandidate", userConnectionId, JSON.stringify(event.candidate));
+                    }
+                };
+
+                peerConnection.ontrack = event => {
+                    document.getElementById("remoteVideo").srcObject = event.streams[0];
+                };
+
+                peerConnection.onconnectionstatechange = () => {
+                    console.log("Admin connection:", peerConnection.connectionState);
+                };
+                peerConnection.oniceconnectionstatechange = () => {
+                    console.log("ICE State:", peerConnection.iceConnectionState);
+                };
+
+                peerConnection.onconnectionstatechange = () => {
+                    console.log("Connection State:", peerConnection.connectionState);
+                };
+                await peerConnection.setRemoteDescription(JSON.parse(offer));
+
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                await connection.invoke("SendAnswer", userConnectionId, JSON.stringify(answer));
+
+                document.getElementById("status").innerText = "Live";
+            });
+
+            connection.on("ReceiveIceCandidate", async (candidate) => {
+                if (!peerConnection) return;
+                await peerConnection.addIceCandidate(JSON.parse(candidate));
+            });
+
+            connection.on("CallEnded", () => {
+                cleanupCall();
+            });
+        }
+
+        function cleanupCall() {
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+
+            document.getElementById("remoteVideo").srcObject = null;
+            document.getElementById("status").innerText = "Call Ended";
+
+            isInCall = false;
+        }
+
+        startApp();
+
+    </script>
+
+</body>
+</html>
