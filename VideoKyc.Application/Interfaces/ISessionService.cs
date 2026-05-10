@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using VideoKyc.Domain.Entities;
 
 namespace VideoKyc.Application.Interfaces
 {

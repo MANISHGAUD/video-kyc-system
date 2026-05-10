@@ -8,67 +8,63 @@ namespace VideoKyc.API.Hubs
     {
         private readonly ISessionService _sessionService;
 
-        public CallHub(ISessionService sessionService)
+        private readonly IChatService _chatService;
+
+        public CallHub(ISessionService sessionService,IChatService chatService)
         {
             _sessionService = sessionService;
+            _chatService = chatService;
         }
 
-        public async Task JoinQueue(string userId)
+        public async Task<Guid> JoinQueue(string userId)
         {
-            var session = await _sessionService.CreateSession(userId, Context.ConnectionId);
+            var session = await _sessionService.CreateSession(userId,Context.ConnectionId);
 
             var waiting = await _sessionService.GetWaitingUsers();
+
             await Clients.Group("Admins").SendAsync("UpdateQueue", waiting);
+
+            return session.Id;
         }
 
         public async Task JoinAdmin()
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, "Admins");
 
-            // ✅ send current queue immediately
             var waiting = await _sessionService.GetWaitingUsers();
             await Clients.Caller.SendAsync("UpdateQueue", waiting);
         }
 
         public async Task StartCall(string userConnectionId)
         {
-            var session = await _sessionService.TryAssignAdmin(
-                userConnectionId,
-                Context.ConnectionId
-            );
+            var session = await _sessionService.TryAssignAdmin(userConnectionId,Context.ConnectionId);
 
             if (session == null)
             {
-                // ❌ Already taken
                 await Clients.Caller.SendAsync("UserAlreadyTaken");
                 return;
             }
 
-            // ✅ Notify user
-            await Clients.Client(userConnectionId)
-                .SendAsync("CallStarted", Context.ConnectionId);
+            await Clients.Client(userConnectionId).SendAsync("CallStarted", Context.ConnectionId);
 
-            // 🔄 Update all admins (remove from queue)
             var waiting = await _sessionService.GetWaitingUsers();
+
             await Clients.Group("Admins").SendAsync("UpdateQueue", waiting);
         }
 
         public async Task SendOffer(string targetId, string offer)
         {
-            await Clients.Client(targetId)
-                .SendAsync("ReceiveOffer", offer, Context.ConnectionId);
+            await Clients.Client(targetId).SendAsync("ReceiveOffer", offer, Context.ConnectionId);
         }
 
         public async Task SendAnswer(string targetId, string answer)
         {
-            await Clients.Client(targetId)
-                .SendAsync("ReceiveAnswer", answer);
+            await Clients.Client(targetId).SendAsync("ReceiveAnswer", answer);
         }
 
         public async Task SendIceCandidate(string targetId, string candidate)
         {
-            await Clients.Client(targetId)
-                .SendAsync("ReceiveIceCandidate", candidate);
+            await Clients.Client(targetId).SendAsync("ReceiveIceCandidate", candidate);
         }
         public async Task EndCall()
         {
@@ -76,7 +72,6 @@ namespace VideoKyc.API.Hubs
 
             await Clients.Others.SendAsync("CallEnded");
 
-            // Refresh queue
             var waiting = await _sessionService.GetWaitingUsers();
             await Clients.Group("Admins").SendAsync("UpdateQueue", waiting);
         }
@@ -88,6 +83,13 @@ namespace VideoKyc.API.Hubs
             await Clients.Group("Admins").SendAsync("UpdateQueue", waiting);
 
             await base.OnDisconnectedAsync(exception);
+        }
+
+        public async Task SendChatMessage(Guid sessionId,string targetConnectionId,string senderType,string message)
+        {
+            await _chatService.SaveMessage(sessionId,senderType,message);
+
+            await Clients.Client(targetConnectionId).SendAsync("ReceiveChatMessage",senderType,message);
         }
     }
 }

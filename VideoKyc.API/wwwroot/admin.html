@@ -19,34 +19,176 @@
 
     <button onclick="endCall()">End Call</button>
 
+    <hr />
+
+    <h3>Chat</h3>
+
+    <div id="chatBox"
+         style="height:200px;
+            overflow:auto;
+            border:1px solid gray;">
+    </div>
+
+    <input type="text" id="chatInput" />
+
+    <button onclick="sendChat()">
+        Send
+    </button>
+
+    <hr />
+
+    <h3>KYC Details</h3>
+
+    <input type="text"
+           id="panNumber"
+           placeholder="PAN Number" />
+
+    <br /><br />
+
+    <input type="text"
+           id="fullName"
+           placeholder="Full Name" />
+
+    <br /><br />
+
+    <input type="text"
+           id="dob"
+           placeholder="DOB" />
+
+    <br /><br />
+
+<textarea id="address"
+          placeholder="Address"></textarea>
+
+    <br /><br />
+
+    <input type="text"
+           id="occupation"
+           placeholder="Occupation" />
+
+    <br /><br />
+
+    <label>
+        <input type="checkbox"
+               id="consentGiven" />
+        Consent Given
+    </label>
+
+    <br /><br />
+
+<textarea id="remarks"
+          placeholder="Remarks"></textarea>
+
+    <br /><br />
+
+    <button onclick="saveKycDetails()">
+        Save KYC
+    </button>
+
+    <hr />
+
+    <h3>Captures</h3>
+
+    <button onclick="captureImage('Face')">
+        Capture Face
+    </button>
+
+    <button onclick="captureImage('Document')">
+        Capture Document
+    </button>
+
+    <hr />
+
+    <h3>Recording</h3>
+
+    <button onclick="startRecording()">
+        Start Recording
+    </button>
+
+    <button onclick="stopRecording()">
+        Stop Recording
+    </button>
+
     <script>
 
         let connection;
         let peerConnection;
         let localStream;
         let isInCall = false;
+        let currentUserConnectionId = null;
+        let currentSessionId = null;
 
-        async function joinUser(connectionId, btn) {
+        let mediaRecorder;
+
+        let recordedChunks = [];
+
+        let isRecording = false;
+
+        async function joinUser(
+            connectionId,
+            sessionId,
+            btn) {
+
+            currentUserConnectionId = connectionId;
+
+            currentSessionId = sessionId;
+
             if (isInCall) return;
 
             btn.disabled = true;
-            document.getElementById("status").innerText = "Connecting...";
 
-            await connection.invoke("StartCall", connectionId);
+            document.getElementById("status")
+                .innerText = "Connecting...";
+
+            await connection.invoke(
+                "StartCall",
+                connectionId);
+        }
+
+        async function sendChat() {
+
+            const message =
+                document.getElementById("chatInput").value;
+
+            if (!message) return;
+
+            await connection.invoke(
+                "SendChatMessage",
+                currentSessionId,
+                currentUserConnectionId,
+                "Admin",
+                message
+            );
+
+            document.getElementById("chatInput").value = "";
+        }
+
+        function addChatMessage(sender, message) {
+
+            const div =
+                document.createElement("div");
+
+            div.innerHTML =
+                `<b>${sender}:</b> ${message}`;
+
+            document.getElementById("chatBox")
+                .appendChild(div);
         }
 
         async function endCall() {
+            debugger;
             cleanupCall();
             await connection.invoke("EndCall");
         }
 
         async function startApp() {
-
+            debugger;
             connection = new signalR.HubConnectionBuilder()
                 .withUrl("/callHub")
                 .build();
 
             await connection.start();
+            connection.on("ReceiveChatMessage")
             await connection.invoke("JoinAdmin");
 
             localStream = await navigator.mediaDevices.getUserMedia({
@@ -65,9 +207,11 @@
                     const li = document.createElement("li");
 
                     li.innerHTML = `
-                    ${session.userId}
-                    <button onclick="joinUser('${session.userConnectionId}', this)">Join</button>
-                `;
+                                    ${session.userId}
+<button onclick="joinUser(
+                '${session.userConnectionId}',
+                '${session.id}',
+                this)">                    `;
 
                     ul.appendChild(li);
                 });
@@ -77,38 +221,64 @@
                 alert("User already taken");
             });
 
+
+            let turnConfig;
+
+            try {
+
+                const response = await fetch("/api/turn");
+
+                turnConfig = await response.json();
+
+                console.log("TURN Config Loaded");
+
+            }
+            catch (err) {
+
+                console.error("TURN API failed", err);
+
+                return;
+            }
+
+
             connection.on("ReceiveOffer", async (offer, userConnectionId) => {
 
                 if (isInCall) return;
                 isInCall = true;
 
+                //peerConnection = new RTCPeerConnection({
+                //    iceServers: [
+                //        {
+                //            urls: "stun:stun.relay.metered.ca:80",
+                //        },
+                //        {
+                //            urls: "turn:global.relay.metered.ca:80",
+                //            username: "ec89d1d30e157d8b291c172c",
+                //            credential: "QEn/hIYXcJ5souCu",
+                //        },
+                //        {
+                //            urls: "turn:global.relay.metered.ca:80?transport=tcp",
+                //            username: "ec89d1d30e157d8b291c172c",
+                //            credential: "QEn/hIYXcJ5souCu",
+                //        },
+                //        {
+                //            urls: "turn:global.relay.metered.ca:443",
+                //            username: "ec89d1d30e157d8b291c172c",
+                //            credential: "QEn/hIYXcJ5souCu",
+                //        },
+                //        {
+                //            urls: "turns:global.relay.metered.ca:443?transport=tcp",
+                //            username: "ec89d1d30e157d8b291c172c",
+                //            credential: "QEn/hIYXcJ5souCu",
+                //        },
+                //    ]
+                //});
+
+
                 peerConnection = new RTCPeerConnection({
-                    iceServers: [
-                        {
-                            urls: "stun:stun.relay.metered.ca:80",
-                        },
-                        {
-                            urls: "turn:global.relay.metered.ca:80",
-                            username: "ec89d1d30e157d8b291c172c",
-                            credential: "QEn/hIYXcJ5souCu",
-                        },
-                        {
-                            urls: "turn:global.relay.metered.ca:80?transport=tcp",
-                            username: "ec89d1d30e157d8b291c172c",
-                            credential: "QEn/hIYXcJ5souCu",
-                        },
-                        {
-                            urls: "turn:global.relay.metered.ca:443",
-                            username: "ec89d1d30e157d8b291c172c",
-                            credential: "QEn/hIYXcJ5souCu",
-                        },
-                        {
-                            urls: "turns:global.relay.metered.ca:443?transport=tcp",
-                            username: "ec89d1d30e157d8b291c172c",
-                            credential: "QEn/hIYXcJ5souCu",
-                        },
-                    ]
+                    iceServers: turnConfig.iceServers
                 });
+
 
                 localStream.getTracks().forEach(track => {
                     peerConnection.addTrack(track, localStream);
@@ -152,6 +322,13 @@
             connection.on("CallEnded", () => {
                 cleanupCall();
             });
+
+            connection.on(
+                "ReceiveChatMessage",
+                (sender, message) => {
+
+                    addChatMessage(sender, message);
+                });
         }
 
         function cleanupCall() {
@@ -167,6 +344,260 @@
         }
 
         startApp();
+
+
+        async function saveKycDetails() {
+
+            const payload = {
+
+                sessionId: currentSessionId,
+
+                panNumber:
+                    document.getElementById("panNumber").value,
+
+                fullName:
+                    document.getElementById("fullName").value,
+
+                dob:
+                    document.getElementById("dob").value,
+
+                address:
+                    document.getElementById("address").value,
+
+                occupation:
+                    document.getElementById("occupation").value,
+
+                consentGiven:
+                    document.getElementById("consentGiven").checked,
+
+                remarks:
+                    document.getElementById("remarks").value
+            };
+
+            const response = await fetch(
+                "/api/kyc/save",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
+                    body: JSON.stringify(payload)
+                });
+
+            if (response.ok) {
+
+                alert("KYC Saved");
+            }
+        }
+
+        async function captureImage(type) {
+
+            const captureType = type;
+
+            const video =
+                document.getElementById("remoteVideo");
+
+            const canvas =
+                document.createElement("canvas");
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            const ctx = canvas.getContext("2d");
+
+            ctx.drawImage(
+                video,
+                0,
+                0,
+                canvas.width,
+                canvas.height
+            );
+
+            canvas.toBlob(async (blob) => {
+
+                const formData = new FormData();
+
+                formData.append(
+                    "file",
+                    blob,
+                    captureType + ".jpg"
+                );
+
+                formData.append(
+                    "sessionId",
+                    currentSessionId
+                );
+
+                formData.append(
+                    "captureType",
+                    captureType
+                );
+
+                console.log("captureType:", captureType);
+
+                const response = await fetch(
+                    "/api/capture/upload",
+                    {
+                        method: "POST",
+                        body: formData
+                    });
+
+                const result =
+                    await response.json();
+
+                console.log("Capture saved:", result);
+
+                if (response.ok) {
+
+                    alert(captureType + " captured");
+                }
+                else {
+
+                    console.error(result);
+                    alert("Capture failed");
+                }
+
+            }, "image/jpeg");
+        }
+
+        async function startRecording() {
+
+            if (isRecording) return;
+
+            const remoteStream =
+                document.getElementById("remoteVideo")
+                    .srcObject;
+
+            if (!remoteStream) {
+
+                alert("Remote stream not ready");
+
+                return;
+            }
+
+            const combinedStream =
+                new MediaStream([
+                    ...localStream.getTracks(),
+                    ...remoteStream.getTracks()
+                ]);
+
+            mediaRecorder =
+                new MediaRecorder(combinedStream, {
+                    mimeType: "video/webm"
+                });
+
+            recordedChunks = [];
+
+            mediaRecorder.ondataavailable = event => {
+
+                if (event.data.size > 0) {
+
+                    recordedChunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = uploadRecording;
+
+            mediaRecorder.start(1000);
+
+            isRecording = true;
+
+            console.log("Recording started");
+        }
+
+        async function startRecording() {
+
+            if (isRecording) return;
+
+            const remoteStream =
+                document.getElementById("remoteVideo")
+                    .srcObject;
+
+            if (!remoteStream) {
+
+                alert("Remote stream not ready");
+
+                return;
+            }
+
+            // Combine admin + customer streams
+            const combinedStream =
+                new MediaStream([
+                    ...localStream.getTracks(),
+                    ...remoteStream.getTracks()
+                ]);
+
+            mediaRecorder =
+                new MediaRecorder(combinedStream, {
+                    mimeType: "video/webm"
+                });
+
+            recordedChunks = [];
+
+            mediaRecorder.ondataavailable = event => {
+
+                if (event.data.size > 0) {
+
+                    recordedChunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = uploadRecording;
+
+            mediaRecorder.start(1000);
+
+            isRecording = true;
+
+            console.log("Recording started");
+        }
+
+        function stopRecording() {
+
+            if (!mediaRecorder) return;
+
+            mediaRecorder.stop();
+
+            isRecording = false;
+
+            console.log("Recording stopped");
+        }
+        async function uploadRecording() {
+
+            const blob =
+                new Blob(recordedChunks, {
+                    type: "video/webm"
+                });
+
+            const formData =
+                new FormData();
+
+            formData.append(
+                "file",
+                blob,
+                "recording.webm"
+            );
+
+            formData.append(
+                "sessionId",
+                currentSessionId
+            );
+
+            const response = await fetch(
+                "/api/recording/upload",
+                {
+                    method: "POST",
+                    body: formData
+                });
+
+            const result =
+                await response.json();
+
+            console.log("Recording uploaded:", result);
+
+            alert("Recording uploaded");
+        }
 
     </script>
 

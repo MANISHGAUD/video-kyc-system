@@ -21,22 +21,40 @@
         <p id="status">Waiting...</p>
     </div>
 
+    <hr />
+
+    <h3>Chat</h3>
+
+    <div id="chatBox"
+         style="height:200px;
+            overflow:auto;
+            border:1px solid gray;">
+    </div>
+
+    <input type="text" id="chatInput" />
+
+    <button onclick="sendChat()">
+        Send
+    </button>
+
+
     <script>
 
         let connection;
         let peerConnection;
         let localStream;
         let isInCall = false;
+        let currentUserConnectionId = null;
+        let currentSessionId = null;
 
         async function startApp() {
-
+            debugger;
             connection = new signalR.HubConnectionBuilder()
                 .withUrl("/callHub")
                 .build();
 
             await connection.start();
 
-            // Generate random user id
             const userId = "user_" + Math.floor(Math.random() * 10000);
 
             localStream = await navigator.mediaDevices.getUserMedia({
@@ -46,41 +64,68 @@
 
             document.getElementById("localVideo").srcObject = localStream;
 
-            await connection.invoke("JoinQueue", userId);
+            currentSessionId = await connection.invoke(
+                "JoinQueue",
+                userId
+            );
+
+            console.log("Session ID:", currentSessionId);
+            let turnConfig;
+
+            try {
+
+                const response = await fetch("/api/turn");
+
+                turnConfig = await response.json();
+
+                console.log("TURN Config Loaded");
+
+            }
+            catch (err) {
+
+                console.error("TURN API failed", err);
+
+                return;
+            }
 
             connection.on("CallStarted", async (adminConnectionId) => {
-
-                if (isInCall) return; // prevent multiple calls
+                currentUserConnectionId = adminConnectionId;
+                if (isInCall) return; 
                 isInCall = true;
 
                 document.getElementById("status").innerText = "Connecting...";
 
+                //peerConnection = new RTCPeerConnection({
+                //    iceServers: [
+                //        {
+                //            urls: "stun:stun.relay.metered.ca:80",
+                //        },
+                //        {
+                //            urls: "turn:global.relay.metered.ca:80",
+                //            username: "ec89d1d30e157d8b291c172c",
+                //            credential: "QEn/hIYXcJ5souCu",
+                //        },
+                //        {
+                //            urls: "turn:global.relay.metered.ca:80?transport=tcp",
+                //            username: "ec89d1d30e157d8b291c172c",
+                //            credential: "QEn/hIYXcJ5souCu",
+                //        },
+                //        {
+                //            urls: "turn:global.relay.metered.ca:443",
+                //            username: "ec89d1d30e157d8b291c172c",
+                //            credential: "QEn/hIYXcJ5souCu",
+                //        },
+                //        {
+                //            urls: "turns:global.relay.metered.ca:443?transport=tcp",
+                //            username: "ec89d1d30e157d8b291c172c",
+                //            credential: "QEn/hIYXcJ5souCu",
+                //        },
+                //    ]
+                //});
+
+
                 peerConnection = new RTCPeerConnection({
-                    iceServers: [
-                        {
-                            urls: "stun:stun.relay.metered.ca:80",
-                        },
-                        {
-                            urls: "turn:global.relay.metered.ca:80",
-                            username: "ec89d1d30e157d8b291c172c",
-                            credential: "QEn/hIYXcJ5souCu",
-                        },
-                        {
-                            urls: "turn:global.relay.metered.ca:80?transport=tcp",
-                            username: "ec89d1d30e157d8b291c172c",
-                            credential: "QEn/hIYXcJ5souCu",
-                        },
-                        {
-                            urls: "turn:global.relay.metered.ca:443",
-                            username: "ec89d1d30e157d8b291c172c",
-                            credential: "QEn/hIYXcJ5souCu",
-                        },
-                        {
-                            urls: "turns:global.relay.metered.ca:443?transport=tcp",
-                            username: "ec89d1d30e157d8b291c172c",
-                            credential: "QEn/hIYXcJ5souCu",
-                        },
-                    ]
+                    iceServers: turnConfig.iceServers
                 });
 
                 localStream.getTracks().forEach(track => {
@@ -130,7 +175,26 @@
 
         startApp();
 
+        async function sendChat() {
+
+            const message =
+                document.getElementById("chatInput").value;
+
+            if (!message) return;
+
+            await connection.invoke(
+                "SendChatMessage",
+                currentSessionId,
+                currentUserConnectionId,
+                "User",
+                message
+            );
+
+            document.getElementById("chatInput").value = "";
+        }
+
         function cleanupCall() {
+            debugger;
             if (peerConnection) {
                 peerConnection.close();
                 peerConnection = null;
@@ -162,6 +226,24 @@
             await connection.invoke("EndCall");
         }
 
+        connection.on(
+            "ReceiveChatMessage",
+            (sender, message) => {
+
+                addChatMessage(sender, message);
+            });
+
+        function addChatMessage(sender, message) {
+
+            const div =
+                document.createElement("div");
+
+            div.innerHTML =
+                `<b>${sender}:</b> ${message}`;
+
+            document.getElementById("chatBox")
+                .appendChild(div);
+        }
     </script>
 
 </body>

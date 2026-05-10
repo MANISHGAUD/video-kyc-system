@@ -1,78 +1,79 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using Microsoft.EntityFrameworkCore;
 using VideoKyc.Application.Interfaces;
 using VideoKyc.Domain;
-using VideoKyc.Domain.Entities;
+using VideoKyc.Infrastructure.Data;
 
 namespace VideoKyc.Infrastructure.Services
 {
     public class SessionService : ISessionService
     {
-        private static List<UserSession> _sessions = new();
-        private static readonly object _lock = new();
+        private readonly AppDbContext _context;
 
-        public Task<UserSession> CreateSession(string userId, string connectionId)
+        public SessionService(AppDbContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<UserSession> CreateSession(string userId,string connectionId)
         {
             var session = new UserSession
             {
-                Id = Guid.NewGuid().ToString(),
+                Id = Guid.NewGuid(),
                 UserId = userId,
                 UserConnectionId = connectionId,
                 Status = SessionStatus.Waiting,
                 CreatedAt = DateTime.UtcNow
             };
 
-            lock (_lock)
-            {
-                _sessions.Add(session);
-            }
+            _context.UserSessions.Add(session);
 
-            return Task.FromResult(session);
+            await _context.SaveChangesAsync();
+
+            return session;
         }
 
-        public Task<List<UserSession>> GetWaitingUsers()
+        public async Task<List<UserSession>> GetWaitingUsers()
         {
-            lock (_lock)
-            {
-                return Task.FromResult(_sessions
-                    .Where(x => x.Status == SessionStatus.Waiting)
-                    .ToList());
-            }
+            return await _context.UserSessions
+                .Where(x => x.Status == SessionStatus.Waiting)
+                .OrderBy(x => x.CreatedAt)
+                .ToListAsync();
         }
 
-        public Task<UserSession?> TryAssignAdmin(string userConnectionId, string adminConnectionId)
+        public async Task<UserSession?> TryAssignAdmin(string userConnectionId,string adminConnectionId)
         {
-            lock (_lock)
-            {
-                var session = _sessions.FirstOrDefault(x => x.UserConnectionId == userConnectionId);
+            var session = await _context.UserSessions
+                .FirstOrDefaultAsync(x =>
+                    x.UserConnectionId == userConnectionId);
 
-                if (session == null) return Task.FromResult<UserSession?>(null);
+            if (session == null)
+                return null;
 
-                // ❗ CRITICAL CHECK
-                if (session.Status != SessionStatus.Waiting)
-                    return Task.FromResult<UserSession?>(null);
+            if (session.Status != SessionStatus.Waiting)
+                return null;
 
-                session.Status = SessionStatus.Connecting;
-                session.AdminConnectionId = adminConnectionId;
+            session.Status = SessionStatus.Connecting;
+            session.AdminConnectionId = adminConnectionId;
 
-                return Task.FromResult<UserSession?>(session);
-            }
+            await _context.SaveChangesAsync();
+
+            return session;
         }
 
-        public Task EndSession(string connectionId)
+        public async Task EndSession(string connectionId)
         {
-            lock (_lock)
-            {
-                var session = _sessions.FirstOrDefault(x =>
+            var session = await _context.UserSessions
+                .FirstOrDefaultAsync(x =>
                     x.UserConnectionId == connectionId ||
                     x.AdminConnectionId == connectionId);
 
-                if (session != null)
-                    session.Status = SessionStatus.Ended;
-            }
+            if (session == null)
+                return;
 
-            return Task.CompletedTask;
+            session.Status = SessionStatus.Ended;
+            session.EndedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
         }
     }
 }
