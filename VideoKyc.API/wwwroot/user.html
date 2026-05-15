@@ -49,9 +49,7 @@
 
         async function startApp() {
             debugger;
-            connection = new signalR.HubConnectionBuilder()
-                .withUrl("/callHub")
-                .build();
+            connection = new signalR.HubConnectionBuilder().withUrl("/callHub").build();
 
             await connection.start();
 
@@ -64,10 +62,7 @@
 
             document.getElementById("localVideo").srcObject = localStream;
 
-            currentSessionId = await connection.invoke(
-                "JoinQueue",
-                userId
-            );
+            currentSessionId = await connection.invoke("JoinQueue",userId);
 
             console.log("Session ID:", currentSessionId);
             let turnConfig;
@@ -177,18 +172,11 @@
 
         async function sendChat() {
 
-            const message =
-                document.getElementById("chatInput").value;
+            const message = document.getElementById("chatInput").value;
 
             if (!message) return;
 
-            await connection.invoke(
-                "SendChatMessage",
-                currentSessionId,
-                currentUserConnectionId,
-                "User",
-                message
-            );
+            await connection.invoke("SendChatMessage",currentSessionId,currentUserConnectionId,"User",message);
 
             document.getElementById("chatInput").value = "";
         }
@@ -206,7 +194,6 @@
             isInCall = false;
         }
 
-        // Controls
         function toggleMic() {
             if (!localStream) return;
             localStream.getAudioTracks().forEach(track => {
@@ -226,8 +213,7 @@
             await connection.invoke("EndCall");
         }
 
-        connection.on(
-            "ReceiveChatMessage",
+        connection.on("ReceiveChatMessage",
             (sender, message) => {
 
                 addChatMessage(sender, message);
@@ -235,14 +221,11 @@
 
         function addChatMessage(sender, message) {
 
-            const div =
-                document.createElement("div");
+            const div = document.createElement("div");
 
-            div.innerHTML =
-                `<b>${sender}:</b> ${message}`;
+            div.innerHTML =`<b>${sender}:</b> ${message}`;
 
-            document.getElementById("chatBox")
-                .appendChild(div);
+            document.getElementById("chatBox").appendChild(div);
         }
     </script>
 

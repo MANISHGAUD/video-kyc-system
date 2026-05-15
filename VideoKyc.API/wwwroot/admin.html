@@ -124,10 +124,7 @@
 
         let isRecording = false;
 
-        async function joinUser(
-            connectionId,
-            sessionId,
-            btn) {
+        async function joinUser(connectionId,sessionId,btn) {
 
             currentUserConnectionId = connectionId;
 
@@ -137,58 +134,54 @@
 
             btn.disabled = true;
 
-            document.getElementById("status")
-                .innerText = "Connecting...";
+            document.getElementById("status").innerText = "Connecting...";
 
-            await connection.invoke(
-                "StartCall",
-                connectionId);
+            await connection.invoke("StartCall",connectionId);
         }
 
         async function sendChat() {
 
-            const message =
-                document.getElementById("chatInput").value;
+            const message = document.getElementById("chatInput").value;
 
             if (!message) return;
 
-            await connection.invoke(
-                "SendChatMessage",
-                currentSessionId,
-                currentUserConnectionId,
-                "Admin",
-                message
-            );
+            await connection.invoke("SendChatMessage",currentSessionId,currentUserConnectionId,"Admin",message);
 
             document.getElementById("chatInput").value = "";
         }
 
         function addChatMessage(sender, message) {
 
-            const div =
-                document.createElement("div");
+            const div = document.createElement("div");
 
-            div.innerHTML =
-                `<b>${sender}:</b> ${message}`;
+            div.innerHTML = `<b>${sender}:</b> ${message}`;
 
-            document.getElementById("chatBox")
-                .appendChild(div);
+            document.getElementById("chatBox").appendChild(div);
         }
 
         async function endCall() {
-            debugger;
             cleanupCall();
             await connection.invoke("EndCall");
         }
 
         async function startApp() {
             debugger;
-            connection = new signalR.HubConnectionBuilder()
-                .withUrl("/callHub")
-                .build();
+            connection = new signalR.HubConnectionBuilder().withUrl("/callHub").build();
 
+            connection.on("UpdateQueue", (users) => {
+
+                const ul = document.getElementById("users");
+                ul.innerHTML = "";
+
+                users.forEach(session => {const li = document.createElement("li");
+
+                    li.innerHTML = `${session.userId}
+
+                    <button onclick="joinUser('${session.userConnectionId}','${session.id}',this)">Join</button>`;
+                    ul.appendChild(li);
+                });
+            });
             await connection.start();
-            connection.on("ReceiveChatMessage")
             await connection.invoke("JoinAdmin");
 
             localStream = await navigator.mediaDevices.getUserMedia({
@@ -197,25 +190,6 @@
             });
 
             document.getElementById("localVideo").srcObject = localStream;
-
-            connection.on("UpdateQueue", (users) => {
-
-                const ul = document.getElementById("users");
-                ul.innerHTML = "";
-
-                users.forEach(session => {
-                    const li = document.createElement("li");
-
-                    li.innerHTML = `
-                                    ${session.userId}
-<button onclick="joinUser(
-                '${session.userConnectionId}',
-                '${session.id}',
-                this)">                    `;
-
-                    ul.appendChild(li);
-                });
-            });
 
             connection.on("UserAlreadyTaken", () => {
                 alert("User already taken");
@@ -323,12 +297,8 @@
                 cleanupCall();
             });
 
-            connection.on(
-                "ReceiveChatMessage",
-                (sender, message) => {
-
-                    addChatMessage(sender, message);
-                });
+            connection.on("ReceiveChatMessage", (sender, message) =>
+            { addChatMessage(sender, message); });
         }
 
         function cleanupCall() {
@@ -374,15 +344,10 @@
                     document.getElementById("remarks").value
             };
 
-            const response = await fetch(
-                "/api/kyc/save",
+            const response = await fetch("/api/kyc/save",
                 {
                     method: "POST",
-
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-
+                    headers: {"Content-Type": "application/json"},
                     body: JSON.stringify(payload)
                 });
 
@@ -396,65 +361,43 @@
 
             const captureType = type;
 
-            const video =
-                document.getElementById("remoteVideo");
+            const video = document.getElementById("remoteVideo");
 
-            const canvas =
-                document.createElement("canvas");
+            const canvas = document.createElement("canvas");
 
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
 
             const ctx = canvas.getContext("2d");
 
-            ctx.drawImage(
-                video,
-                0,
-                0,
-                canvas.width,
-                canvas.height
-            );
+            ctx.drawImage( video, 0,  0, canvas.width, canvas.height );
 
             canvas.toBlob(async (blob) => {
 
                 const formData = new FormData();
 
-                formData.append(
-                    "file",
-                    blob,
-                    captureType + ".jpg"
-                );
+                formData.append( "file", blob, captureType + ".jpg" );
 
-                formData.append(
-                    "sessionId",
-                    currentSessionId
-                );
+                formData.append( "sessionId", currentSessionId );
 
-                formData.append(
-                    "captureType",
-                    captureType
-                );
+                formData.append( "captureType", captureType );
 
                 console.log("captureType:", captureType);
 
-                const response = await fetch(
-                    "/api/capture/upload",
+                const response = await fetch("/api/capture/upload",
                     {
                         method: "POST",
                         body: formData
                     });
 
-                const result =
-                    await response.json();
+                const result = await response.json();
 
                 console.log("Capture saved:", result);
 
                 if (response.ok) {
-
                     alert(captureType + " captured");
                 }
                 else {
-
                     console.error(result);
                     alert("Capture failed");
                 }
@@ -466,63 +409,12 @@
 
             if (isRecording) return;
 
-            const remoteStream =
-                document.getElementById("remoteVideo")
-                    .srcObject;
+            const remoteStream = document.getElementById("remoteVideo") .srcObject;
 
             if (!remoteStream) {
-
                 alert("Remote stream not ready");
-
                 return;
             }
-
-            const combinedStream =
-                new MediaStream([
-                    ...localStream.getTracks(),
-                    ...remoteStream.getTracks()
-                ]);
-
-            mediaRecorder =
-                new MediaRecorder(combinedStream, {
-                    mimeType: "video/webm"
-                });
-
-            recordedChunks = [];
-
-            mediaRecorder.ondataavailable = event => {
-
-                if (event.data.size > 0) {
-
-                    recordedChunks.push(event.data);
-                }
-            };
-
-            mediaRecorder.onstop = uploadRecording;
-
-            mediaRecorder.start(1000);
-
-            isRecording = true;
-
-            console.log("Recording started");
-        }
-
-        async function startRecording() {
-
-            if (isRecording) return;
-
-            const remoteStream =
-                document.getElementById("remoteVideo")
-                    .srcObject;
-
-            if (!remoteStream) {
-
-                alert("Remote stream not ready");
-
-                return;
-            }
-
-            // Combine admin + customer streams
             const combinedStream =
                 new MediaStream([
                     ...localStream.getTracks(),
@@ -570,29 +462,19 @@
                     type: "video/webm"
                 });
 
-            const formData =
-                new FormData();
+            const formData = new FormData();
 
-            formData.append(
-                "file",
-                blob,
-                "recording.webm"
-            );
+            formData.append("file",blob, "recording.webm");
 
-            formData.append(
-                "sessionId",
-                currentSessionId
-            );
+            formData.append("sessionId",currentSessionId);
 
-            const response = await fetch(
-                "/api/recording/upload",
+            const response = await fetch("/api/recording/upload",
                 {
                     method: "POST",
                     body: formData
                 });
 
-            const result =
-                await response.json();
+            const result = await response.json();
 
             console.log("Recording uploaded:", result);
 

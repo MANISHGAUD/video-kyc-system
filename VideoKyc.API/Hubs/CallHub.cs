@@ -90,6 +90,8 @@ namespace VideoKyc.API.Hubs
             await _chatService.SaveMessage(sessionId,senderType,message);
 
             await Clients.Client(targetConnectionId).SendAsync("ReceiveChatMessage",senderType,message);
+
+            await Clients.Client(Context.ConnectionId).SendAsync("ReceiveChatMessage",senderType,message);
         }
     }
 }
