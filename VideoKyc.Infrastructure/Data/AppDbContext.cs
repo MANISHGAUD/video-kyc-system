@@ -17,12 +17,19 @@ namespace VideoKyc.Infrastructure.Data
         public DbSet<SessionCapture> SessionCaptures { get; set; }
         public DbSet<SessionRecording> SessionRecordings { get; set; }
 
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        public DbSet<SessionLocation> SessionLocations { get; set; }
+        protected override void OnModelCreating(
+    ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<UserSession>()
                 .Property(x => x.Status)
                 .HasConversion<string>();
+
+            modelBuilder.Entity<UserSession>()
+                .HasOne(x => x.Location)
+                .WithOne(x => x.Session)
+                .HasForeignKey<SessionLocation>(
+                    x => x.SessionId);
 
             base.OnModelCreating(modelBuilder);
         }

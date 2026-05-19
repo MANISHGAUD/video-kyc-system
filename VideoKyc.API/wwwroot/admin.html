@@ -168,16 +168,83 @@
             debugger;
             connection = new signalR.HubConnectionBuilder().withUrl("/callHub").build();
 
+            //connection.on("UpdateQueue", (users) => {
+
+            //    const ul = document.getElementById("users");
+            //    ul.innerHTML = "";
+
+            //    users.forEach(session => {const li = document.createElement("li");
+
+            //        li.innerHTML = `${session.userId}
+
+            //        <button onclick="joinUser('${session.userConnectionId}','${session.id}',this)">Join</button>`;
+            //        ul.appendChild(li);
+            //    });
+            //});
+
             connection.on("UpdateQueue", (users) => {
 
                 const ul = document.getElementById("users");
+
                 ul.innerHTML = "";
 
-                users.forEach(session => {const li = document.createElement("li");
+                users.forEach(session => {
 
-                    li.innerHTML = `${session.userId}
+                    const li = document.createElement("li");
 
-                    <button onclick="joinUser('${session.userConnectionId}','${session.id}',this)">Join</button>`;
+                    let locationHtml = "";
+
+                    if (session.location) {
+
+                        locationHtml = `
+
+                <br/>
+                Latitude:
+                ${session.location.latitude}
+
+                <br/>
+
+                Longitude:
+                ${session.location.longitude}
+
+                <br/>
+
+                Accuracy:
+                ${session.location.accuracy} meters
+
+                <br/>
+
+                <a target="_blank"
+                   href="https://maps.google.com/?q=
+                   ${session.location.latitude},
+                   ${session.location.longitude}">
+                   View Map
+                </a>
+            `;
+                    }
+                    else {
+
+                        locationHtml =  "<br/>Location not available";
+                    }
+
+                    li.innerHTML = `
+
+            <b>${session.userId}</b>
+
+            ${locationHtml}
+
+            <br/><br/>
+
+            <button onclick="joinUser(
+                '${session.userConnectionId}',
+                '${session.id}',
+                this)">
+                Join
+            </button>
+
+            <hr/>
+        `;
+
                     ul.appendChild(li);
                 });
             });

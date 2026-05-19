@@ -34,10 +34,8 @@ namespace VideoKyc.Infrastructure.Services
 
         public async Task<List<UserSession>> GetWaitingUsers()
         {
-            return await _context.UserSessions
-                .Where(x => x.Status == SessionStatus.Waiting)
-                .OrderBy(x => x.CreatedAt)
-                .ToListAsync();
+            return await _context.UserSessions.Include(x => x.Location).
+                Where(x => x.Status == SessionStatus.Waiting).OrderBy(x => x.CreatedAt).ToListAsync();
         }
 
         public async Task<UserSession?> TryAssignAdmin(string userConnectionId,string adminConnectionId)

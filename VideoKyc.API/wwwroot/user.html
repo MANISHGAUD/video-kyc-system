@@ -52,7 +52,6 @@
             connection = new signalR.HubConnectionBuilder().withUrl("/callHub").build();
 
             await connection.start();
-
             const userId = "user_" + Math.floor(Math.random() * 10000);
 
             localStream = await navigator.mediaDevices.getUserMedia({
@@ -63,6 +62,7 @@
             document.getElementById("localVideo").srcObject = localStream;
 
             currentSessionId = await connection.invoke("JoinQueue",userId);
+            await captureLocation();
 
             console.log("Session ID:", currentSessionId);
             let turnConfig;
@@ -226,6 +226,79 @@
             div.innerHTML =`<b>${sender}:</b> ${message}`;
 
             document.getElementById("chatBox").appendChild(div);
+        }
+        async function captureLocation() {
+
+            if (!navigator.geolocation) {
+
+                alert("Geolocation not supported");
+
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+
+                async (position) => {
+
+                    const payload = {
+
+                        sessionId: currentSessionId,
+
+                        latitude: position.coords.latitude,
+
+                        longitude: position.coords.longitude,
+
+                        accuracy: position.coords.accuracy
+                    };
+
+                    console.log("Location:", payload);
+
+                    const response =
+                        await fetch("/api/location/save", {
+
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+
+                            body: JSON.stringify(payload)
+                        });
+
+                    if (response.ok) {
+
+                        console.log("Location saved");
+                    }
+                    else {
+
+                        const error = await response.text();
+
+                        console.error(error);
+
+                        alert("Location save failed");
+                    }
+
+                    console.log("Location saved");
+
+                },
+
+                (error) => {
+
+                    alert(
+                        "Please allow location permission before joining VKYC"
+                    );
+
+                    console.error(error);
+                },
+
+                {
+                    enableHighAccuracy: true,
+
+                    timeout: 20000,
+
+                    maximumAge: 60000
+                }
+            );
         }
     </script>
 

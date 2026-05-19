@@ -42,8 +42,7 @@ namespace VideoKyc.API.Controllers
 
                 FileName = fileName,
 
-                FilePath =
-                        "/recordings/" + fileName,
+                FilePath =  "/recordings/" + fileName,
 
                 CreatedAt = DateTime.UtcNow
             };

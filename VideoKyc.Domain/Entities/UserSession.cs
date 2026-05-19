@@ -1,4 +1,5 @@
 ﻿using VideoKyc.Domain;
+using VideoKyc.Domain.Entities;
 
 public class UserSession
 {
@@ -15,4 +16,5 @@ public class UserSession
     public DateTime CreatedAt { get; set; }
 
     public DateTime? EndedAt { get; set; }
+    public SessionLocation? Location { get; set; }
 }
