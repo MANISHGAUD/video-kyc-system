@@ -1,9 +1,9 @@
 ﻿
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using VideoKyc.Application.Interfaces;
 namespace VideoKyc.API.Hubs
 {
-
     public class CallHub : Hub
     {
         private readonly ISessionService _sessionService;

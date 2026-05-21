@@ -166,7 +166,10 @@
 
         async function startApp() {
             debugger;
-            connection = new signalR.HubConnectionBuilder().withUrl("/callHub").build();
+            connection = new signalR.HubConnectionBuilder().withUrl("/callHub", {
+                accessTokenFactory: () =>
+                    localStorage.getItem("token")
+            }).build();
 
             //connection.on("UpdateQueue", (users) => {
 

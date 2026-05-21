@@ -1,0 +1,57 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Login</title>
+</head>
+<body>
+
+    <h2>Admin Login</h2>
+
+    <input id="username" placeholder="Username" />
+    <br /><br />
+
+    <input id="password" type="password" placeholder="Password" />
+
+    <br /><br />
+
+    <button onclick="login()">  Login </button>
+
+    <script>
+
+        async function login() {
+
+            const response =
+                await fetch("/api/auth/login",
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+
+                        body: JSON.stringify({
+
+                            username: document.getElementById("username").value,
+
+                            password: document.getElementById("password").value
+                        })
+                    });
+
+            if (!response.ok) {
+
+                alert("Invalid login");
+
+                return;
+            }
+
+            const result = await response.json();
+
+            localStorage.setItem("token", result.token);
+
+            window.location = "/admin.html";
+        }
+
+    </script>
+
+</body>
+</html>
