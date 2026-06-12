@@ -68,7 +68,7 @@ namespace VideoKyc.Infrastructure.Services
             if (session == null)
                 return;
 
-            session.Status = SessionStatus.Ended;
+            session.Status = SessionStatus.Completed;
             session.EndedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();

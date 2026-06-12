@@ -18,6 +18,7 @@ namespace VideoKyc.Infrastructure.Data
         public DbSet<SessionRecording> SessionRecordings { get; set; }
 
         public DbSet<SessionLocation> SessionLocations { get; set; }
+        public DbSet<SessionStateHistory> SessionStateHistories { get; set; }
         protected override void OnModelCreating(
     ModelBuilder modelBuilder)
         {

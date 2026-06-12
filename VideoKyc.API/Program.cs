@@ -71,6 +71,7 @@ builder.Services.AddSignalR();
 builder.Services.AddScoped<ISessionService, SessionService>();
 builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.AddScoped<IKycService, KycService>();
+builder.Services.AddScoped<IWorkflowService,WorkflowService>();
 var app = builder.Build();
 
 app.UseStaticFiles();

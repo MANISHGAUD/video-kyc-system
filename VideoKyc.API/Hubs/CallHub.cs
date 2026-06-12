@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.SignalR;
 using VideoKyc.Application.Interfaces;
 namespace VideoKyc.API.Hubs
 {
+    //[Authorize]
     public class CallHub : Hub
     {
         private readonly ISessionService _sessionService;
