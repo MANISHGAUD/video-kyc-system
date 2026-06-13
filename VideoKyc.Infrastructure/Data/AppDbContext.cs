@@ -19,8 +19,9 @@ namespace VideoKyc.Infrastructure.Data
 
         public DbSet<SessionLocation> SessionLocations { get; set; }
         public DbSet<SessionStateHistory> SessionStateHistories { get; set; }
+        public DbSet<SessionDeviceInfo> SessionDeviceInfos{get;  set;}
         protected override void OnModelCreating(
-    ModelBuilder modelBuilder)
+        ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<UserSession>()
                 .Property(x => x.Status)
@@ -30,6 +31,11 @@ namespace VideoKyc.Infrastructure.Data
                 .HasOne(x => x.Location)
                 .WithOne(x => x.Session)
                 .HasForeignKey<SessionLocation>(
+                    x => x.SessionId);
+            modelBuilder.Entity<UserSession>()
+                .HasOne(x => x.DeviceInfo)
+                .WithOne()
+                .HasForeignKey<SessionDeviceInfo>(
                     x => x.SessionId);
 
             base.OnModelCreating(modelBuilder);

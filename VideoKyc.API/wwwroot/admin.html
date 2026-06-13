@@ -9,14 +9,47 @@
     <h2>Admin Dashboard</h2>
 
     <p id="status">Waiting...</p>
-
+    <h3 id="callTimer">00:00:00</h3>
     <ul id="users"></ul>
 
-    <video id="localVideo" autoplay muted playsinline style="width:200px;"></video>
-    <video id="remoteVideo" autoplay playsinline style="width:400px;"></video>
+    <h2 id="recordingIndicator" style="display:none; color:red;">
+        🔴 RECORDING
+    </h2>
 
+    <div style=" position:relative;width:900px;">
+
+        <video id="remoteVideo" autoplay playsinline style="width:900px;border:1px solid gray;"></video>
+
+        <video id="localVideo" autoplay muted playsinline style="position:absolute;bottom:20px;right:20px;width:220px;border:2px solid white;"></video>
+
+    </div>
+    <div id="customerPanel">
+
+        <h3>Customer Details</h3>
+
+        <div id="customerInfo">
+
+        </div>
+
+    </div>
     <br />
+    <hr />
 
+    <h3>Network Health</h3>
+
+    <p>
+        Customer:
+        <span id="customerNetwork">
+            Waiting...
+        </span>
+    </p>
+
+    <p>
+        Agent:
+        <span id="agentNetwork">
+            Waiting...
+        </span>
+    </p>
     <button onclick="endCall()">End Call</button>
 
     <hr />
@@ -123,8 +156,11 @@
         let recordedChunks = [];
 
         let isRecording = false;
+        let callStartTime;
+        let timerInterval;
+        let networkMonitorInterval;
 
-        async function joinUser(connectionId,sessionId,btn) {
+        async function joinUser(connectionId, sessionId, btn) {
 
             currentUserConnectionId = connectionId;
 
@@ -136,7 +172,9 @@
 
             document.getElementById("status").innerText = "Connecting...";
 
-            await connection.invoke("StartCall",connectionId);
+            await loadCustomerDetails(sessionId);
+
+            await connection.invoke("StartCall", connectionId);
         }
 
         async function sendChat() {
@@ -145,7 +183,7 @@
 
             if (!message) return;
 
-            await connection.invoke("SendChatMessage",currentSessionId,currentUserConnectionId,"Admin",message);
+            await connection.invoke("SendChatMessage", currentSessionId, currentUserConnectionId, "Admin", message);
 
             document.getElementById("chatInput").value = "";
         }
@@ -193,56 +231,45 @@
 
                 users.forEach(session => {
 
-                    const li = document.createElement("li");
+                    const gpsStatus =
+                        session.location
+                            ? "🟢"
+                            : "🔴";
 
-                    let locationHtml = "";
+                    const deviceStatus =
+                        session.deviceInfo
+                            ? "🟢"
+                            : "🔴";
 
-                    if (session.location) {
-
-                        locationHtml = `
-
-                <br/>
-                Latitude:
-                ${session.location.latitude}
-
-                <br/>
-
-                Longitude:
-                ${session.location.longitude}
-
-                <br/>
-
-                Accuracy:
-                ${session.location.accuracy} meters
-
-                <br/>
-
-                <a target="_blank"
-                   href="https://maps.google.com/?q=
-                   ${session.location.latitude},
-                   ${session.location.longitude}">
-                   View Map
-                </a>
-            `;
-                    }
-                    else {
-
-                        locationHtml =  "<br/>Location not available";
-                    }
+                    const li =
+                        document.createElement("li");
 
                     li.innerHTML = `
 
-            <b>${session.userId}</b>
+            Customer:
+            ${session.userId}
 
-            ${locationHtml}
+            <br>
 
-            <br/><br/>
+            GPS:
+            ${gpsStatus}
 
-            <button onclick="joinUser(
-                '${session.userConnectionId}',
-                '${session.id}',
-                this)">
+            <br>
+
+            Device:
+            ${deviceStatus}
+
+            <br><br>
+
+            <button onclick="
+                joinUser(
+                    '${session.userConnectionId}',
+                    '${session.id}',
+                    this
+                )">
+
                 Join
+
             </button>
 
             <hr/>
@@ -251,6 +278,7 @@
                     ul.appendChild(li);
                 });
             });
+
             await connection.start();
             await connection.invoke("JoinAdmin");
 
@@ -289,7 +317,11 @@
 
                 if (isInCall) return;
                 isInCall = true;
+                document.getElementById("status").innerText = "Live";
 
+                networkMonitorInterval = setInterval(monitorNetwork, 5000);
+
+                startCallTimer();
                 //peerConnection = new RTCPeerConnection({
                 //    iceServers: [
                 //        {
@@ -367,8 +399,7 @@
                 cleanupCall();
             });
 
-            connection.on("ReceiveChatMessage", (sender, message) =>
-            { addChatMessage(sender, message); });
+            connection.on("ReceiveChatMessage", (sender, message) => { addChatMessage(sender, message); });
         }
 
         function cleanupCall() {
@@ -376,6 +407,9 @@
                 peerConnection.close();
                 peerConnection = null;
             }
+            clearInterval(networkMonitorInterval);
+
+            document.getElementById("callTimer").innerText = "00:00:00";
 
             document.getElementById("remoteVideo").srcObject = null;
             document.getElementById("status").innerText = "Call Ended";
@@ -417,7 +451,7 @@
             const response = await fetch("/api/kyc/save",
                 {
                     method: "POST",
-                    headers: {"Content-Type": "application/json"},
+                    headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload)
                 });
 
@@ -440,17 +474,17 @@
 
             const ctx = canvas.getContext("2d");
 
-            ctx.drawImage( video, 0,  0, canvas.width, canvas.height );
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
             canvas.toBlob(async (blob) => {
 
                 const formData = new FormData();
 
-                formData.append( "file", blob, captureType + ".jpg" );
+                formData.append("file", blob, captureType + ".jpg");
 
-                formData.append( "sessionId", currentSessionId );
+                formData.append("sessionId", currentSessionId);
 
-                formData.append( "captureType", captureType );
+                formData.append("captureType", captureType);
 
                 console.log("captureType:", captureType);
 
@@ -478,8 +512,9 @@
         async function startRecording() {
 
             if (isRecording) return;
+            document.getElementById("recordingIndicator").style.display = "block";
 
-            const remoteStream = document.getElementById("remoteVideo") .srcObject;
+            const remoteStream = document.getElementById("remoteVideo").srcObject;
 
             if (!remoteStream) {
                 alert("Remote stream not ready");
@@ -516,6 +551,7 @@
         }
 
         function stopRecording() {
+            document.getElementById("recordingIndicator").style.display = "none";
 
             if (!mediaRecorder) return;
 
@@ -534,9 +570,9 @@
 
             const formData = new FormData();
 
-            formData.append("file",blob, "recording.webm");
+            formData.append("file", blob, "recording.webm");
 
-            formData.append("sessionId",currentSessionId);
+            formData.append("sessionId", currentSessionId);
 
             const response = await fetch("/api/recording/upload",
                 {
@@ -551,6 +587,142 @@
             alert("Recording uploaded");
         }
 
+        function startCallTimer() {
+
+            callStartTime = new Date();
+
+            timerInterval = setInterval(() => {
+
+                const diff =
+                    Math.floor(
+                        (new Date() - callStartTime) / 1000
+                    );
+
+                const hours = String(Math.floor(diff / 3600)).padStart(2, "0");
+
+                const minutes = String(Math.floor((diff % 3600) / 60)).padStart(2, "0");
+
+                const seconds = String(diff % 60).padStart(2, "0");
+
+                document.getElementById("callTimer").innerText = `${hours}:${minutes}:${seconds}`;
+
+            }, 1000);
+        }
+        async function monitorNetwork() {
+
+            if (!peerConnection)
+                return;
+
+            const stats = await peerConnection.getStats();
+
+            stats.forEach(report => {
+
+                if (report.type === "candidate-pair") {
+
+                    const rtt = report.currentRoundTripTime;
+
+                    if (!rtt)
+                        return;
+
+                    const ms = Math.round(rtt * 1000);
+
+                    let quality =  "🟢 Excellent";
+
+                    if (ms > 200)
+                        quality = "🟡 Moderate";
+
+                    if (ms > 500)
+                        quality = "🔴 Poor";
+
+                    document.getElementById("customerNetwork").innerText = `${quality} (${ms} ms)`;
+
+                    document.getElementById("agentNetwork").innerText = `${quality} (${ms} ms)`;
+                }
+            });
+        }
+
+        async function loadCustomerDetails(sessionId) {
+
+            const response =
+                await fetch(
+                    `/api/session/details/${sessionId}`
+                );
+
+            const data =  await response.json();
+
+            let html = "";
+
+            if (data.deviceInfo) {
+
+                html += `
+            <h4>Device</h4>
+
+            Platform:
+            ${data.deviceInfo.platform}
+            <br>
+
+            Screen:
+            ${data.deviceInfo.screenWidth}
+            x
+            ${data.deviceInfo.screenHeight}
+
+            <br>
+
+            Language:
+            ${data.deviceInfo.language}
+
+            <br>
+
+            Camera:
+            ${data.deviceInfo.cameraAvailable ? "Yes" : "No"}
+
+            <br>
+
+            Mic:
+            ${data.deviceInfo.microphoneAvailable ? "Yes" : "No"}
+
+            <br>
+
+            GPS:
+            ${data.deviceInfo.gpsAvailable ? "Yes" : "No"}
+
+            <hr>
+        `;
+            }
+
+            if (data.location) {
+
+                html += `
+            <h4>Location</h4>
+
+            Latitude:
+            ${data.location.latitude}
+
+            <br>
+
+            Longitude:
+            ${data.location.longitude}
+
+            <br>
+
+            Accuracy:
+            ${data.location.accuracy}
+
+            <br>
+
+            <a target="_blank"
+               href="https://maps.google.com/?q=
+               ${data.location.latitude},
+               ${data.location.longitude}">
+               View Map
+            </a>
+        `;
+            }
+
+            document.getElementById(
+                "customerInfo"
+            ).innerHTML = html;
+        }
     </script>
 
 </body>

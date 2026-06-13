@@ -14,12 +14,10 @@ namespace VideoKyc.API.Controllers
     {
         private readonly AppDbContext _context;
 
-        private readonly IHubContext<CallHub> _hub;
 
-        public LocationController(AppDbContext context, IHubContext<CallHub> hub)
+        public LocationController(AppDbContext context)
         {
             _context = context;
-            _hub = hub;
         }
 
         [HttpPost("save")]
@@ -29,15 +27,26 @@ namespace VideoKyc.API.Controllers
 
             request.CreatedAt = DateTime.UtcNow;
 
-            _context.SessionLocations.Add(request);
+            var existing = await _context.SessionLocations.FirstOrDefaultAsync(x => x.SessionId == request.SessionId);
+
+            if (existing != null)
+            {
+                existing.Latitude = request.Latitude;
+                existing.Longitude = request.Longitude;
+                existing.Accuracy = request.Accuracy;
+            }
+            else
+            {
+                request.Id = Guid.NewGuid();
+                request.CreatedAt = DateTime.UtcNow;
+
+                _context.SessionLocations.Add(request);
+            }
 
             await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync();
 
-            var waitingUsers =
-                await _context.UserSessions.Include(x => x.Location).
-                Where(x => x.Status == SessionStatus.Waiting).OrderBy(x => x.CreatedAt).ToListAsync();
-
-            await _hub.Clients.Group("Admins").SendAsync("UpdateQueue", waitingUsers);
+           
 
             return Ok();
         }

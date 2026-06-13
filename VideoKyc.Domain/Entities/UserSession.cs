@@ -17,4 +17,5 @@ public class UserSession
 
     public DateTime? EndedAt { get; set; }
     public SessionLocation? Location { get; set; }
+    public SessionDeviceInfo? DeviceInfo { get; set; }
 }

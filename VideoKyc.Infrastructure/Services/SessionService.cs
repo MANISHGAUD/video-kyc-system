@@ -16,6 +16,12 @@ namespace VideoKyc.Infrastructure.Services
 
         public async Task<UserSession> CreateSession(string userId,string connectionId)
         {
+            var existing = await _context.UserSessions.FirstOrDefaultAsync(x => x.UserConnectionId == connectionId && x.Status == SessionStatus.Waiting);
+
+            if (existing != null)
+            {
+                return existing;
+            }
             var session = new UserSession
             {
                 Id = Guid.NewGuid(),
@@ -34,8 +40,8 @@ namespace VideoKyc.Infrastructure.Services
 
         public async Task<List<UserSession>> GetWaitingUsers()
         {
-            return await _context.UserSessions.Include(x => x.Location).
-                Where(x => x.Status == SessionStatus.Waiting).OrderBy(x => x.CreatedAt).ToListAsync();
+            return await _context.UserSessions.Include(x => x.Location).Include(x => x.DeviceInfo)
+                         .Where(x => x.Status == SessionStatus.Waiting).OrderBy(x => x.CreatedAt).ToListAsync();
         }
 
         public async Task<UserSession?> TryAssignAdmin(string userConnectionId,string adminConnectionId)

@@ -9,6 +9,23 @@
     <div>
         <h2>User</h2>
 
+        <div id="locationPanel">
+
+            <h3>Location Verification</h3>
+
+            <span id="locationStatus">
+                Waiting...
+            </span>
+
+            <br /><br />
+
+            <button id="retryLocationBtn"
+                    onclick="captureLocation()"
+                    style="display:none;">
+                Retry Location
+            </button>
+
+        </div>
         <video id="localVideo" autoplay muted playsinline style="width:200px;"></video>
         <video id="remoteVideo" autoplay playsinline style="width:400px;"></video>
 
@@ -16,6 +33,7 @@
 
         <button onclick="toggleMic()">Mute/Unmute</button>
         <button onclick="toggleCamera()">Camera On/Off</button>
+        <button onclick="flipCamera()">Flip Camera </button>
         <button onclick="endCall()">End Call</button>
 
         <p id="status">Waiting...</p>
@@ -46,23 +64,32 @@
         let isInCall = false;
         let currentUserConnectionId = null;
         let currentSessionId = null;
+        let currentFacingMode = "user";
+        let locationVerified = false;
+        let cameras = [];
+
+        let currentCameraIndex = 0;
 
         async function startApp() {
             debugger;
             connection = new signalR.HubConnectionBuilder().withUrl("/callHub").build();
 
             await connection.start();
-            const userId = "user_" + Math.floor(Math.random() * 10000);
-
+            const userId = "TEST_USER";
             localStream = await navigator.mediaDevices.getUserMedia({
                 video: true,
                 audio: true
             });
+            await loadCameras();
 
             document.getElementById("localVideo").srcObject = localStream;
 
-            currentSessionId = await connection.invoke("JoinQueue",userId);
+            currentSessionId = await connection.invoke("JoinQueue", userId);
+            await sendDeviceInfo();
+
             await captureLocation();
+
+            console.log("Customer Verification Ready");
 
             console.log("Session ID:", currentSessionId);
             let turnConfig;
@@ -227,18 +254,24 @@
 
             document.getElementById("chatBox").appendChild(div);
         }
+
         async function captureLocation() {
 
             if (!navigator.geolocation) {
 
                 alert("Geolocation not supported");
-
                 return;
             }
 
             navigator.geolocation.getCurrentPosition(
 
                 async (position) => {
+
+                    locationVerified = true;
+
+                    document.getElementById("locationStatus").innerHTML = "✅ Location Captured";
+
+                    document.getElementById("retryLocationBtn").style.display = "none";
 
                     const payload = {
 
@@ -250,8 +283,6 @@
 
                         accuracy: position.coords.accuracy
                     };
-
-                    console.log("Location:", payload);
 
                     const response =
                         await fetch("/api/location/save", {
@@ -265,40 +296,161 @@
                             body: JSON.stringify(payload)
                         });
 
-                    if (response.ok) {
-
-                        console.log("Location saved");
-                    }
-                    else {
-
-                        const error = await response.text();
-
-                        console.error(error);
+                    if (!response.ok) {
 
                         alert("Location save failed");
                     }
-
-                    console.log("Location saved");
-
                 },
 
                 (error) => {
 
-                    alert(
-                        "Please allow location permission before joining VKYC"
-                    );
+                    locationVerified = false;
+
+                    document.getElementById("locationStatus").innerHTML = "❌ Location Required";
+
+                    document.getElementById("retryLocationBtn").style.display = "block";
 
                     console.error(error);
                 },
-
                 {
                     enableHighAccuracy: true,
-
                     timeout: 20000,
-
                     maximumAge: 60000
                 }
             );
+        }
+
+        async function flipCamera() {
+
+            if (cameras.length < 2) {
+                alert("Only one camera found");
+                return;
+            }
+            currentCameraIndex++;
+
+            if (currentCameraIndex >= cameras.length)
+            {
+                currentCameraIndex = 0;
+            }
+
+            const newStream = await navigator.mediaDevices
+                    .getUserMedia({
+
+                        video: {
+
+                            deviceId: {
+
+                                exact:
+                                    cameras[
+                                        currentCameraIndex
+                                    ].deviceId
+                            }
+                        },
+
+                        audio: true
+                    });
+
+            const newVideoTrack = newStream.getVideoTracks()[0];
+
+            const sender = peerConnection
+                    ?.getSenders()
+                    .find(s =>
+                        s.track?.kind ===
+                        "video"
+                    );
+
+            if (sender) {
+
+                await sender.replaceTrack(newVideoTrack);
+            }
+
+            localStream.getVideoTracks().forEach(t => t.stop());
+
+            document.getElementById("localVideo").srcObject = newStream;
+
+            localStream = newStream;
+        }
+        async function loadCameras() {
+
+            const devices = await navigator.mediaDevices.enumerateDevices();
+
+            cameras = devices.filter(d => d.kind === "videoinput");
+
+            console.log("Cameras",cameras);
+        }
+        async function sendDeviceInfo() {
+
+            const devices = await navigator.mediaDevices.enumerateDevices();
+
+            const payload = {
+
+                sessionId: currentSessionId,
+
+                userAgent: navigator.userAgent,
+
+                platform: navigator.platform,
+
+                screenWidth: screen.width,
+
+                screenHeight: screen.height,
+
+                language: navigator.language,
+
+                cameraAvailable:
+                    devices.some(
+                        d => d.kind === "videoinput"
+                    ),
+
+                microphoneAvailable:
+                    devices.some(
+                        d => d.kind === "audioinput"
+                    ),
+
+                gpsAvailable:
+                    !!navigator.geolocation,
+
+                browser: getBrowser(),
+                networkType:
+                    navigator.connection
+                        ?.effectiveType || "Unknown",
+
+                downlink:
+                    navigator.connection
+                        ?.downlink || 0
+            };
+
+            console.log(payload);
+
+            await fetch("/api/device/save",
+                {
+                    method: "POST",
+
+                    headers:
+                    {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body:
+                        JSON.stringify(payload)
+                });
+        }
+
+        function getBrowser() {
+
+            const ua =
+                navigator.userAgent;
+
+            if (ua.includes("Chrome"))
+                return "Chrome";
+
+            if (ua.includes("Safari"))
+                return "Safari";
+
+            if (ua.includes("Firefox"))
+                return "Firefox";
+
+            return "Unknown";
         }
     </script>
 
